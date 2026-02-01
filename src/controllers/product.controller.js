@@ -1,5 +1,4 @@
 const Product = require('../models/Product');
-const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/cloudinary');
 
 // @desc    Get all products
 // @route   GET /api/products
@@ -61,7 +60,7 @@ exports.getProducts = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get products error:', error);
+    console.error('❌ Get products error:', error);
     res.status(500).json({
       status: 'error',
       message: 'Error fetching products',
@@ -89,7 +88,7 @@ exports.getProductById = async (req, res) => {
       data: { product }
     });
   } catch (error) {
-    console.error('Get product error:', error);
+    console.error('❌ Get product error:', error);
     res.status(500).json({
       status: 'error',
       message: 'Error fetching product',
@@ -103,6 +102,10 @@ exports.getProductById = async (req, res) => {
 // @access  Private/Admin
 exports.createProduct = async (req, res) => {
   try {
+    console.log('📦 Creating product...');
+    console.log('📋 Request body:', req.body);
+    console.log('🖼️ Files:', req.files ? req.files.length : 'No files');
+    
     const {
       name,
       description,
@@ -115,16 +118,56 @@ exports.createProduct = async (req, res) => {
       specifications
     } = req.body;
     
-    // Handle images
+    // Validation de base
+    if (!name || !description || !price || !category || stock === undefined) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide all required fields: name, description, price, category, stock'
+      });
+    }
+    
+    // Handle images - version simplifiée sans Cloudinary
     const images = [];
+    
+    // Si on a des fichiers uploadés
     if (req.files && req.files.length > 0) {
-      for (const file of req.files) {
-        const result = await uploadToCloudinary(file.buffer);
+      console.log(`📸 Processing ${req.files.length} images...`);
+      
+      // Pour le moment, stocker juste les données de base
+      // En production, vous utiliserez Cloudinary
+      req.files.forEach((file, index) => {
         images.push({
-          url: result.secure_url,
-          public_id: result.public_id,
-          alt: name
+          url: `data:${file.mimetype};base64,${file.buffer.toString('base64')}`,
+          alt: name || `Product image ${index + 1}`,
+          isBase64: true
         });
+      });
+    } else {
+      // Images par défaut selon la catégorie
+      const defaultImages = {
+        robes: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
+        pantalons: 'https://images.unsplash.com/photo-1586790170083-2f9ceadc732d?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
+        jupes: 'https://images.unsplash.com/photo-1585487000160-6eb9ce6b5a53?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
+        chaussures: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
+        bijoux: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80'
+      };
+      
+      images.push({
+        url: defaultImages[category] || defaultImages.robes,
+        alt: name,
+        isDefault: true
+      });
+    }
+    
+    // Parse specifications si c'est une string
+    let parsedSpecifications = {};
+    if (specifications) {
+      try {
+        parsedSpecifications = typeof specifications === 'string' 
+          ? JSON.parse(specifications) 
+          : specifications;
+      } catch (e) {
+        console.warn('⚠️ Could not parse specifications:', e.message);
       }
     }
     
@@ -136,11 +179,13 @@ exports.createProduct = async (req, res) => {
       category,
       stock: Number(stock),
       status,
-      featured,
-      discount: Number(discount),
-      specifications: specifications ? JSON.parse(specifications) : {},
+      featured: featured === 'true' || featured === true,
+      discount: Number(discount) || 0,
+      specifications: parsedSpecifications,
       images
     });
+    
+    console.log('✅ Product created:', product._id);
     
     res.status(201).json({
       status: 'success',
@@ -148,11 +193,12 @@ exports.createProduct = async (req, res) => {
       data: { product }
     });
   } catch (error) {
-    console.error('Create product error:', error);
+    console.error('❌ Create product error:', error);
     res.status(500).json({
       status: 'error',
       message: 'Error creating product',
-      error: error.message
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
@@ -171,6 +217,9 @@ exports.updateProduct = async (req, res) => {
       });
     }
     
+    console.log('🔄 Updating product:', product._id);
+    console.log('📋 Update data:', req.body);
+    
     // Update basic fields
     const updatableFields = [
       'name', 'description', 'price', 'category', 
@@ -180,50 +229,40 @@ exports.updateProduct = async (req, res) => {
     updatableFields.forEach(field => {
       if (req.body[field] !== undefined) {
         if (field === 'specifications' && typeof req.body[field] === 'string') {
-          product[field] = JSON.parse(req.body[field]);
+          try {
+            product[field] = JSON.parse(req.body[field]);
+          } catch (e) {
+            console.warn('⚠️ Could not parse specifications:', e.message);
+          }
+        } else if (field === 'featured') {
+          product[field] = req.body[field] === 'true' || req.body[field] === true;
+        } else if (field === 'price' || field === 'stock' || field === 'discount') {
+          product[field] = Number(req.body[field]);
         } else {
           product[field] = req.body[field];
         }
       }
     });
     
-    // Handle new images if provided
+    // Handle images si fournies
     if (req.files && req.files.length > 0) {
-      // Delete old images from Cloudinary
-      if (product.images && product.images.length > 0) {
-        for (const image of product.images) {
-          if (image.public_id) {
-            await deleteFromCloudinary(image.public_id);
-          }
-        }
-      }
+      console.log(`📸 Updating ${req.files.length} images...`);
       
-      // Upload new images
       const newImages = [];
-      for (const file of req.files) {
-        const result = await uploadToCloudinary(file.buffer);
+      req.files.forEach((file, index) => {
         newImages.push({
-          url: result.secure_url,
-          public_id: result.public_id,
-          alt: req.body.name || product.name
+          url: `data:${file.mimetype};base64,${file.buffer.toString('base64')}`,
+          alt: req.body.name || product.name || `Product image ${index + 1}`,
+          isBase64: true
         });
-      }
+      });
       
       product.images = newImages;
     }
     
-    // Handle image removal if specified
-    if (req.body.removedImages) {
-      const removedIds = JSON.parse(req.body.removedImages);
-      product.images = product.images.filter(img => !removedIds.includes(img.public_id));
-      
-      // Delete from Cloudinary
-      for (const publicId of removedIds) {
-        await deleteFromCloudinary(publicId);
-      }
-    }
-    
     await product.save();
+    
+    console.log('✅ Product updated:', product._id);
     
     res.json({
       status: 'success',
@@ -231,11 +270,12 @@ exports.updateProduct = async (req, res) => {
       data: { product }
     });
   } catch (error) {
-    console.error('Update product error:', error);
+    console.error('❌ Update product error:', error);
     res.status(500).json({
       status: 'error',
       message: 'Error updating product',
-      error: error.message
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
@@ -254,24 +294,16 @@ exports.deleteProduct = async (req, res) => {
       });
     }
     
-    // Delete images from Cloudinary
-    if (product.images && product.images.length > 0) {
-      for (const image of product.images) {
-        if (image.public_id) {
-          await deleteFromCloudinary(image.public_id);
-        }
-      }
-    }
-    
-    // Delete product from database
     await product.deleteOne();
+    
+    console.log('🗑️ Product deleted:', req.params.id);
     
     res.json({
       status: 'success',
       message: 'Product deleted successfully'
     });
   } catch (error) {
-    console.error('Delete product error:', error);
+    console.error('❌ Delete product error:', error);
     res.status(500).json({
       status: 'error',
       message: 'Error deleting product',
@@ -316,7 +348,9 @@ exports.getProductStats = async (req, res) => {
     ]);
     
     // Get low stock products (less than 5)
-    const lowStockProducts = await Product.countDocuments({ stock: { $lt: 5 }, stock: { $gt: 0 } });
+    const lowStockProducts = await Product.countDocuments({ 
+      stock: { $lt: 5, $gt: 0 } 
+    });
     
     res.json({
       status: 'success',
@@ -333,7 +367,7 @@ exports.getProductStats = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get stats error:', error);
+    console.error('❌ Get stats error:', error);
     res.status(500).json({
       status: 'error',
       message: 'Error fetching product statistics',
@@ -356,7 +390,7 @@ exports.getFeaturedProducts = async (req, res) => {
       data: { products }
     });
   } catch (error) {
-    console.error('Get featured products error:', error);
+    console.error('❌ Get featured products error:', error);
     res.status(500).json({
       status: 'error',
       message: 'Error fetching featured products',
@@ -385,7 +419,7 @@ exports.getProductsByCategory = async (req, res) => {
       data: { products }
     });
   } catch (error) {
-    console.error('Get products by category error:', error);
+    console.error('❌ Get products by category error:', error);
     res.status(500).json({
       status: 'error',
       message: 'Error fetching products by category',
