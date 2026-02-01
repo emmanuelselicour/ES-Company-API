@@ -11,9 +11,10 @@ exports.getProducts = async (req, res) => {
       category,
       minPrice,
       maxPrice,
-      status = 'active',
+      status,
       sort = '-createdAt',
-      search
+      search,
+      featured
     } = req.query;
     
     // Build filter
@@ -25,6 +26,11 @@ exports.getProducts = async (req, res) => {
     
     if (status) {
       filter.status = status;
+    } else {
+      // Par défaut, montrer seulement les actifs pour le public
+      if (!req.user || req.user.role !== 'admin') {
+        filter.status = 'active';
+      }
     }
     
     if (minPrice || maxPrice) {
@@ -33,19 +39,38 @@ exports.getProducts = async (req, res) => {
       if (maxPrice) filter.price.$lte = Number(maxPrice);
     }
     
-    if (search) {
-      filter.$text = { $search: search };
+    if (featured === 'true') {
+      filter.featured = true;
     }
     
-    // Execute query with pagination
-    const skip = (page - 1) * limit;
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
     
-    const products = await Product.find(filter)
-      .sort(sort)
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+    const total = await Product.countDocuments(filter);
+    
+    // Execute query
+    let productsQuery = Product.find(filter)
       .skip(skip)
       .limit(Number(limit));
     
-    const total = await Product.countDocuments(filter);
+    // Handle sorting
+    if (sort) {
+      const sortObject = {};
+      if (sort.startsWith('-')) {
+        sortObject[sort.substring(1)] = -1;
+      } else {
+        sortObject[sort] = 1;
+      }
+      productsQuery = productsQuery.sort(sortObject);
+    }
+    
+    const products = await productsQuery;
     
     res.json({
       status: 'success',
@@ -83,6 +108,14 @@ exports.getProductById = async (req, res) => {
       });
     }
     
+    // Si l'utilisateur n'est pas admin et le produit est inactif
+    if ((!req.user || req.user.role !== 'admin') && product.status !== 'active') {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Product not found'
+      });
+    }
+    
     res.json({
       status: 'success',
       data: { product }
@@ -104,7 +137,7 @@ exports.createProduct = async (req, res) => {
   try {
     console.log('📦 Creating product...');
     console.log('📋 Request body:', req.body);
-    console.log('🖼️ Files:', req.files ? req.files.length : 'No files');
+    console.log('🖼️ Files received:', req.files ? req.files.length : 0);
     
     const {
       name,
@@ -115,7 +148,8 @@ exports.createProduct = async (req, res) => {
       status = 'active',
       featured = false,
       discount = 0,
-      specifications
+      specifications,
+      images: imagesJson
     } = req.body;
     
     // Validation de base
@@ -126,24 +160,45 @@ exports.createProduct = async (req, res) => {
       });
     }
     
-    // Handle images - version simplifiée sans Cloudinary
-    const images = [];
+    let images = [];
     
-    // Si on a des fichiers uploadés
+    // Option 1: Images from uploaded files
     if (req.files && req.files.length > 0) {
-      console.log(`📸 Processing ${req.files.length} images...`);
+      console.log(`📸 Processing ${req.files.length} uploaded images...`);
       
-      // Pour le moment, stocker juste les données de base
-      // En production, vous utiliserez Cloudinary
       req.files.forEach((file, index) => {
+        // Convertir le buffer en base64 pour stockage temporaire
+        const base64Image = file.buffer.toString('base64');
+        const dataUrl = `data:${file.mimetype};base64,${base64Image}`;
+        
         images.push({
-          url: `data:${file.mimetype};base64,${file.buffer.toString('base64')}`,
+          url: dataUrl,
           alt: name || `Product image ${index + 1}`,
+          filename: file.originalname,
           isBase64: true
         });
       });
-    } else {
-      // Images par défaut selon la catégorie
+    }
+    // Option 2: Images from JSON string in body
+    else if (imagesJson) {
+      try {
+        const parsedImages = typeof imagesJson === 'string' 
+          ? JSON.parse(imagesJson) 
+          : imagesJson;
+        
+        if (Array.isArray(parsedImages)) {
+          images = parsedImages.map(img => ({
+            url: img.url || img,
+            alt: img.alt || name,
+            isExternal: true
+          }));
+        }
+      } catch (e) {
+        console.warn('⚠️ Could not parse images JSON:', e.message);
+      }
+    }
+    // Option 3: Default image based on category
+    else {
       const defaultImages = {
         robes: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
         pantalons: 'https://images.unsplash.com/photo-1586790170083-2f9ceadc732d?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
@@ -154,12 +209,12 @@ exports.createProduct = async (req, res) => {
       
       images.push({
         url: defaultImages[category] || defaultImages.robes,
-        alt: name,
+        alt: name || 'Product image',
         isDefault: true
       });
     }
     
-    // Parse specifications si c'est une string
+    // Parse specifications
     let parsedSpecifications = {};
     if (specifications) {
       try {
@@ -172,7 +227,7 @@ exports.createProduct = async (req, res) => {
     }
     
     // Create product
-    const product = await Product.create({
+    const productData = {
       name,
       description,
       price: Number(price),
@@ -183,9 +238,13 @@ exports.createProduct = async (req, res) => {
       discount: Number(discount) || 0,
       specifications: parsedSpecifications,
       images
-    });
+    };
     
-    console.log('✅ Product created:', product._id);
+    console.log('📝 Product data to save:', productData);
+    
+    const product = await Product.create(productData);
+    
+    console.log('✅ Product created successfully:', product._id);
     
     res.status(201).json({
       status: 'success',
@@ -194,6 +253,8 @@ exports.createProduct = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Create product error:', error);
+    console.error('❌ Error stack:', error.stack);
+    
     res.status(500).json({
       status: 'error',
       message: 'Error creating product',
@@ -219,6 +280,7 @@ exports.updateProduct = async (req, res) => {
     
     console.log('🔄 Updating product:', product._id);
     console.log('📋 Update data:', req.body);
+    console.log('🖼️ Update files:', req.files ? req.files.length : 0);
     
     // Update basic fields
     const updatableFields = [
@@ -244,25 +306,47 @@ exports.updateProduct = async (req, res) => {
       }
     });
     
-    // Handle images si fournies
+    // Handle images if provided
     if (req.files && req.files.length > 0) {
-      console.log(`📸 Updating ${req.files.length} images...`);
+      console.log(`📸 Updating with ${req.files.length} new images...`);
       
       const newImages = [];
       req.files.forEach((file, index) => {
+        const base64Image = file.buffer.toString('base64');
+        const dataUrl = `data:${file.mimetype};base64,${base64Image}`;
+        
         newImages.push({
-          url: `data:${file.mimetype};base64,${file.buffer.toString('base64')}`,
+          url: dataUrl,
           alt: req.body.name || product.name || `Product image ${index + 1}`,
+          filename: file.originalname,
           isBase64: true
         });
       });
       
       product.images = newImages;
     }
+    // Handle images from JSON if provided
+    else if (req.body.images) {
+      try {
+        const imagesData = typeof req.body.images === 'string' 
+          ? JSON.parse(req.body.images) 
+          : req.body.images;
+        
+        if (Array.isArray(imagesData)) {
+          product.images = imagesData.map(img => ({
+            url: img.url || img,
+            alt: img.alt || product.name,
+            isExternal: true
+          }));
+        }
+      } catch (e) {
+        console.warn('⚠️ Could not parse images for update:', e.message);
+      }
+    }
     
     await product.save();
     
-    console.log('✅ Product updated:', product._id);
+    console.log('✅ Product updated successfully:', product._id);
     
     res.json({
       status: 'success',
@@ -294,9 +378,11 @@ exports.deleteProduct = async (req, res) => {
       });
     }
     
-    await product.deleteOne();
+    // Instead of deleting, mark as inactive
+    product.status = 'inactive';
+    await product.save();
     
-    console.log('🗑️ Product deleted:', req.params.id);
+    console.log('🗑️ Product marked as inactive:', req.params.id);
     
     res.json({
       status: 'success',
@@ -320,9 +406,13 @@ exports.getProductStats = async (req, res) => {
     const totalProducts = await Product.countDocuments();
     const activeProducts = await Product.countDocuments({ status: 'active' });
     const outOfStockProducts = await Product.countDocuments({ status: 'out_of_stock' });
+    const inactiveProducts = await Product.countDocuments({ status: 'inactive' });
     
     // Get total inventory value
     const inventoryStats = await Product.aggregate([
+      {
+        $match: { status: 'active' }
+      },
       {
         $group: {
           _id: null,
@@ -337,6 +427,9 @@ exports.getProductStats = async (req, res) => {
     // Get products by category
     const categoryStats = await Product.aggregate([
       {
+        $match: { status: 'active' }
+      },
+      {
         $group: {
           _id: '$category',
           count: { $sum: 1 },
@@ -349,7 +442,14 @@ exports.getProductStats = async (req, res) => {
     
     // Get low stock products (less than 5)
     const lowStockProducts = await Product.countDocuments({ 
-      stock: { $lt: 5, $gt: 0 } 
+      stock: { $lt: 5, $gt: 0 },
+      status: 'active'
+    });
+    
+    // Get no stock products
+    const noStockProducts = await Product.countDocuments({ 
+      stock: 0,
+      status: 'active'
     });
     
     res.json({
@@ -358,7 +458,9 @@ exports.getProductStats = async (req, res) => {
         totalProducts,
         activeProducts,
         outOfStockProducts,
+        inactiveProducts,
         lowStockProducts,
+        noStockProducts,
         inventoryValue: inventoryStats[0]?.totalValue || 0,
         averagePrice: inventoryStats[0]?.averagePrice || 0,
         minPrice: inventoryStats[0]?.minPrice || 0,
@@ -381,7 +483,11 @@ exports.getProductStats = async (req, res) => {
 // @access  Public
 exports.getFeaturedProducts = async (req, res) => {
   try {
-    const products = await Product.find({ featured: true, status: 'active' })
+    const products = await Product.find({ 
+      featured: true, 
+      status: 'active',
+      stock: { $gt: 0 }
+    })
       .limit(8)
       .sort('-createdAt');
     
@@ -409,7 +515,8 @@ exports.getProductsByCategory = async (req, res) => {
     
     const products = await Product.find({ 
       category, 
-      status: 'active' 
+      status: 'active',
+      stock: { $gt: 0 }
     })
     .limit(Number(limit))
     .sort('-createdAt');
