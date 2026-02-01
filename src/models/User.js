@@ -40,10 +40,6 @@ const userSchema = new mongoose.Schema({
     zipCode: String
   },
   phone: String,
-  wishlist: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product'
-  }],
   isActive: {
     type: Boolean,
     default: true
@@ -55,11 +51,16 @@ const userSchema = new mongoose.Schema({
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
+  // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) return next();
   
   try {
+    // Generate a salt
     const salt = await bcrypt.genSalt(10);
+    
+    // Hash the password along with the new salt
     this.password = await bcrypt.hash(this.password, salt);
+    
     next();
   } catch (error) {
     next(error);
@@ -80,7 +81,7 @@ userSchema.methods.generateAuthToken = function() {
       role: this.role 
     },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE }
+    { expiresIn: process.env.JWT_EXPIRE || '30d' }
   );
 };
 
