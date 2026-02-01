@@ -15,7 +15,7 @@ services:
       - key: FRONTEND_URL
         value: https://es-company-ht.netlify.app
       - key: ADMIN_URL
-        value: https://es-company-ht.netlify.app/admin
+        value: https://es-company-ht.netlify.app/admin-panel/index.html
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
