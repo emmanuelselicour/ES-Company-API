@@ -1,5 +1,96 @@
 const User = require('../models/User');
 
+// @desc    Admin login (special endpoint for admin panel)
+// @route   POST /api/auth/admin/login
+// @access  Public
+exports.adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    console.log('🔐 Admin login attempt for:', email);
+    
+    // Validation basique
+    if (!email || !password) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Email and password are required'
+      });
+    }
+    
+    // Check if user exists with password selection
+    const user = await User.findOne({ email }).select('+password');
+    
+    if (!user) {
+      console.log('❌ User not found:', email);
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid email or password'
+      });
+    }
+    
+    // Check if user is admin
+    if (user.role !== 'admin') {
+      console.log('❌ User is not admin:', email);
+      return res.status(403).json({
+        status: 'error',
+        message: 'Access denied. Admin privileges required.'
+      });
+    }
+    
+    // Check if user is active
+    if (!user.isActive) {
+      console.log('❌ User account inactive:', email);
+      return res.status(401).json({
+        status: 'error',
+        message: 'Account is deactivated'
+      });
+    }
+    
+    // Check password
+    const isPasswordValid = await user.comparePassword(password);
+    
+    if (!isPasswordValid) {
+      console.log('❌ Invalid password for:', email);
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid email or password'
+      });
+    }
+    
+    // Update last login
+    user.lastLogin = new Date();
+    await user.save();
+    
+    // Generate token
+    const token = user.generateAuthToken();
+    
+    console.log('✅ Admin login successful:', email);
+    
+    res.json({
+      status: 'success',
+      message: 'Admin login successful',
+      data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          avatar: user.avatar,
+          lastLogin: user.lastLogin
+        },
+        token
+      }
+    });
+  } catch (error) {
+    console.error('❌ Admin login error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Error logging in as admin',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
 // @desc    Register user
 // @route   POST /api/auth/register
 // @access  Public
@@ -46,7 +137,7 @@ exports.register = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Error registering user',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -110,7 +201,7 @@ exports.login = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Error logging in',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -131,7 +222,7 @@ exports.getMe = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Error getting user profile',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -161,63 +252,7 @@ exports.updateProfile = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Error updating profile',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Admin login (special endpoint for admin panel)
-// @route   POST /api/auth/admin/login
-// @access  Public
-exports.adminLogin = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    
-    // Check if user exists and is admin
-    const user = await User.findOne({ email, role: 'admin' }).select('+password');
-    if (!user) {
-      return res.status(401).json({
-        status: 'error',
-        message: 'Invalid credentials or not authorized'
-      });
-    }
-    
-    // Check password
-    const isPasswordValid = await user.comparePassword(password);
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        status: 'error',
-        message: 'Invalid credentials'
-      });
-    }
-    
-    // Update last login
-    user.lastLogin = new Date();
-    await user.save();
-    
-    // Generate token
-    const token = user.generateAuthToken();
-    
-    res.json({
-      status: 'success',
-      message: 'Admin login successful',
-      data: {
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          avatar: user.avatar
-        },
-        token
-      }
-    });
-  } catch (error) {
-    console.error('Admin login error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Error logging in as admin',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
