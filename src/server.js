@@ -8,46 +8,48 @@ require('dotenv').config();
 
 const app = express();
 
-// Vérifier les variables d'environnement requises
-const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET'];
-const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
-
-if (missingEnvVars.length > 0) {
-  console.error(`❌ Variables d'environnement manquantes: ${missingEnvVars.join(', ')}`);
-  console.error('⚠️  Veuillez configurer ces variables sur le dashboard Render');
-  console.log('📝 Variables actuellement définies:');
-  console.log('- PORT:', process.env.PORT);
-  console.log('- NODE_ENV:', process.env.NODE_ENV);
-  console.log('- FRONTEND_URL:', process.env.FRONTEND_URL);
-  console.log('- MONGODB_URI:', process.env.MONGODB_URI ? 'Défini' : 'Non défini');
-  console.log('- JWT_SECRET:', process.env.JWT_SECRET ? 'Défini' : 'Non défini');
-  process.exit(1);
-}
+// Vérifier les variables d'environnement
+console.log('🔧 Environment check:');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PORT:', process.env.PORT);
+console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Configured' : 'Not configured');
+console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Configured' : 'Not configured');
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL || 'Not configured');
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 app.use(morgan('dev'));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // CORS Configuration
 const corsOptions = {
   origin: [
     'https://es-company-ht.netlify.app',
     'http://localhost:3000',
-    'http://localhost:5173', // Vite dev server
+    'http://localhost:5173',
     process.env.FRONTEND_URL
-  ].filter(Boolean), // Filtrer les valeurs null/undefined
+  ].filter(Boolean),
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
+
 app.use(cors(corsOptions));
+
+// Gérer les pré-vols OPTIONS
+app.options('*', cors(corsOptions));
 
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000 // limit each IP to 1000 requests per windowMs
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: {
+    status: 'error',
+    message: 'Too many requests from this IP, please try again later.'
+  }
 });
 app.use('/api/', limiter);
 
@@ -55,6 +57,12 @@ app.use('/api/', limiter);
 const authRoutes = require('./routes/auth.routes');
 const productRoutes = require('./routes/product.routes');
 const uploadRoutes = require('./routes/upload.routes');
+
+// Log middleware pour déboguer
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
+  next();
+});
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -70,8 +78,10 @@ app.get('/api/health', (req, res) => {
     version: '1.0.0',
     environment: process.env.NODE_ENV,
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-    cors: {
-      allowedOrigins: corsOptions.origin
+    endpoints: {
+      products: '/api/products',
+      auth: '/api/auth',
+      upload: '/api/upload'
     }
   });
 });
@@ -84,105 +94,94 @@ app.get('/api/test', (req, res) => {
     env: {
       node_env: process.env.NODE_ENV,
       port: process.env.PORT,
-      frontend_url: process.env.FRONTEND_URL,
       has_mongodb_uri: !!process.env.MONGODB_URI,
       has_jwt_secret: !!process.env.JWT_SECRET,
-      admin_email: process.env.ADMIN_EMAIL,
-      admin_password_set: !!process.env.ADMIN_PASSWORD
+      frontend_url: process.env.FRONTEND_URL
     },
-    system: {
-      node_version: process.version,
-      platform: process.platform,
-      uptime: process.uptime()
+    cors: {
+      allowed_origins: corsOptions.origin
     }
   });
 });
 
-// Route pour créer un admin rapidement (à supprimer en production)
-app.post('/api/init-admin', async (req, res) => {
-  try {
-    const User = require('./models/User');
-    
-    // Vérifier si un admin existe déjà
-    const adminExists = await User.findOne({ email: process.env.ADMIN_EMAIL || 'admin@escompany.com' });
-    
-    if (adminExists) {
-      return res.json({
-        status: 'success',
-        message: 'Admin user already exists',
-        user: {
-          email: adminExists.email,
-          role: adminExists.role,
-          created: adminExists.createdAt
+// Demo products endpoint (pour le développement)
+app.get('/api/demo/products', (req, res) => {
+  const demoProducts = [
+    {
+      _id: '1',
+      name: "Robe d'été fleurie",
+      description: "Robe légère et confortable pour l'été, avec motif floral élégant.",
+      price: 2500,
+      category: "robes",
+      stock: 15,
+      status: "active",
+      featured: true,
+      discount: 10,
+      images: [
+        {
+          url: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+          alt: "Robe d'été fleurie"
         }
-      });
+      ],
+      specifications: {
+        material: "Coton",
+        color: "Multicolore",
+        size: ["S", "M", "L", "XL"]
+      },
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    {
+      _id: '2',
+      name: "Pantalon slim noir",
+      description: "Pantalon slim élégant en tissu stretch confortable.",
+      price: 1800,
+      category: "pantalons",
+      stock: 25,
+      status: "active",
+      featured: false,
+      discount: 0,
+      images: [
+        {
+          url: "https://images.unsplash.com/photo-1586790170083-2f9ceadc732d?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+          alt: "Pantalon slim noir"
+        }
+      ],
+      specifications: {
+        material: "Polyester",
+        color: "Noir",
+        size: ["S", "M", "L"]
+      },
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
-    
-    // Créer l'admin
-    const adminUser = new User({
-      name: 'Administrateur E-S COMPANY',
-      email: process.env.ADMIN_EMAIL || 'admin@escompany.com',
-      password: process.env.ADMIN_PASSWORD || 'admin123',
-      role: 'admin'
-    });
-    
-    await adminUser.save();
-    
-    res.json({
-      status: 'success',
-      message: 'Admin user created successfully',
-      user: {
-        email: adminUser.email,
-        role: adminUser.role,
-        created: adminUser.createdAt
+  ];
+  
+  res.json({
+    status: 'success',
+    data: {
+      products: demoProducts,
+      pagination: {
+        page: 1,
+        limit: 10,
+        total: 2,
+        pages: 1
       }
-    });
-  } catch (error) {
-    console.error('Error creating admin:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Error creating admin user',
-      error: error.message
-    });
-  }
-});
-
-// Route pour lister tous les utilisateurs (dev seulement)
-if (process.env.NODE_ENV === 'development') {
-  app.get('/api/dev/users', async (req, res) => {
-    try {
-      const User = require('./models/User');
-      const users = await User.find({}).select('-password');
-      
-      res.json({
-        status: 'success',
-        count: users.length,
-        users
-      });
-    } catch (error) {
-      res.status(500).json({
-        status: 'error',
-        message: error.message
-      });
     }
   });
-}
+});
 
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({
     status: 'error',
     message: `Route ${req.originalUrl} not found`,
-    availableRoutes: [
-      'GET /api/health',
-      'GET /api/test',
-      'GET /api/products',
-      'GET /api/products/:id',
-      'POST /api/auth/login',
-      'POST /api/auth/admin/login',
-      'POST /api/auth/register',
-      'POST /api/init-admin (dev only)'
-    ]
+    available_routes: {
+      products: '/api/products',
+      health: '/api/health',
+      test: '/api/test',
+      demo_products: '/api/demo/products'
+    }
   });
 });
 
@@ -190,24 +189,17 @@ app.use('*', (req, res) => {
 app.use((err, req, res, next) => {
   console.error('❌ Error:', err.stack);
   
-  // Erreur Mongoose validation
+  // Erreurs Mongoose
   if (err.name === 'ValidationError') {
+    const errors = Object.values(err.errors).map(el => el.message);
     return res.status(400).json({
       status: 'error',
       message: 'Validation error',
-      errors: Object.values(err.errors).map(e => e.message)
+      errors: errors
     });
   }
   
-  // Erreur Mongoose duplicate key
-  if (err.code === 11000) {
-    return res.status(400).json({
-      status: 'error',
-      message: 'Duplicate field value entered'
-    });
-  }
-  
-  // Erreur JWT
+  // Erreurs JWT
   if (err.name === 'JsonWebTokenError') {
     return res.status(401).json({
       status: 'error',
@@ -215,14 +207,7 @@ app.use((err, req, res, next) => {
     });
   }
   
-  // Erreur JWT expired
-  if (err.name === 'TokenExpiredError') {
-    return res.status(401).json({
-      status: 'error',
-      message: 'Token expired'
-    });
-  }
-  
+  // Erreurs générales
   res.status(err.statusCode || 500).json({
     status: 'error',
     message: err.message || 'Internal server error',
@@ -230,116 +215,58 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Database connection avec retry
-const connectWithRetry = () => {
-  console.log('🔗 Connecting to MongoDB...');
-  
-  mongoose.connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 5000,
-    socketTimeoutMS: 45000,
-  })
-  .then(() => {
-    console.log('✅ MongoDB connected successfully');
-    console.log(`📊 Database: ${mongoose.connection.name}`);
-    console.log(`📍 Host: ${mongoose.connection.host}`);
-    
-    // Créer l'utilisateur admin après connexion
-    createAdminUser();
-  })
-  .catch(err => {
-    console.error('❌ MongoDB connection error:', err.message);
-    console.log('🔄 Retrying in 5 seconds...');
-    setTimeout(connectWithRetry, 5000);
-  });
-};
-
-// Fonction pour créer l'utilisateur admin
-const createAdminUser = async () => {
+// Database connection avec gestion d'erreur améliorée
+const connectDB = async () => {
   try {
-    const User = require('./models/User');
-    
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@escompany.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-    
-    // Vérifier si un admin existe déjà
-    const adminExists = await User.findOne({ email: adminEmail });
-    
-    if (adminExists) {
-      console.log('✅ Admin user already exists:', adminExists.email);
+    if (!process.env.MONGODB_URI) {
+      console.warn('⚠️  MONGODB_URI not configured, using demo mode');
+      console.log('📝 You can still use the API with demo data');
+      console.log('📝 To use real database, set MONGODB_URI in environment variables');
       return;
     }
     
-    // Créer l'admin
-    const adminUser = new User({
-      name: 'Administrateur E-S COMPANY',
-      email: adminEmail,
-      password: adminPassword,
-      role: 'admin'
+    await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
     });
     
-    await adminUser.save();
-    console.log('✅ Admin user created:', adminUser.email);
-    console.log('🔑 Default credentials:');
-    console.log(`   Email: ${adminEmail}`);
-    console.log(`   Password: ${adminPassword}`);
-    console.log('⚠️  CHANGE THESE CREDENTIALS IN PRODUCTION!');
+    console.log('✅ MongoDB connected successfully');
+    console.log(`📊 Database: ${mongoose.connection.name}`);
+    
+    // Créer des indexes pour la performance
+    try {
+      await mongoose.connection.db.collection('products').createIndex({ name: 'text', description: 'text' });
+      await mongoose.connection.db.collection('products').createIndex({ category: 1 });
+      await mongoose.connection.db.collection('products').createIndex({ status: 1 });
+      await mongoose.connection.db.collection('products').createIndex({ featured: 1 });
+      console.log('✅ Database indexes created');
+    } catch (indexError) {
+      console.warn('⚠️ Could not create indexes:', indexError.message);
+    }
     
   } catch (error) {
-    console.error('❌ Error creating admin user:', error.message);
+    console.error('❌ MongoDB connection error:', error.message);
+    console.log('⚠️  Starting server in demo mode (without database)');
+    console.log('📝 You can still access demo data at /api/demo/products');
   }
 };
 
-// Événements de connexion MongoDB
-mongoose.connection.on('connected', () => {
-  console.log('📡 MongoDB connected');
-});
-
-mongoose.connection.on('error', (err) => {
-  console.error('❌ MongoDB connection error:', err);
-});
-
-mongoose.connection.on('disconnected', () => {
-  console.log('🔌 MongoDB disconnected');
-});
-
-// Gérer la déconnexion proprement
-process.on('SIGINT', async () => {
-  await mongoose.connection.close();
-  console.log('👋 MongoDB connection closed through app termination');
-  process.exit(0);
-});
-
-// Démarrer la connexion MongoDB
-connectWithRetry();
+// Connecter à la base de données
+connectDB();
 
 // Start server
 const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, () => {
-  console.log(`\n🚀 Server running on port ${PORT}`);
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL || 'Not configured'}`);
   console.log(`🔒 JWT Secret: ${process.env.JWT_SECRET ? 'Configured' : 'Not configured'}`);
-  console.log(`🗄️  MongoDB URI: ${process.env.MONGODB_URI ? 'Configured' : 'Not configured'}`);
-  console.log(`\n📋 Available endpoints:`);
-  console.log(`   GET  ${server.address().port ? `http://localhost:${PORT}` : ''}/api/health`);
-  console.log(`   GET  ${server.address().port ? `http://localhost:${PORT}` : ''}/api/test`);
-  console.log(`   GET  ${server.address().port ? `http://localhost:${PORT}` : ''}/api/products`);
-  console.log(`   POST ${server.address().port ? `http://localhost:${PORT}` : ''}/api/auth/admin/login`);
-  console.log(`   POST ${server.address().port ? `http://localhost:${PORT}` : ''}/api/init-admin`);
-  console.log(`\n👤 Admin credentials will be created automatically on first run`);
+  console.log(`🗄️  MongoDB: ${process.env.MONGODB_URI ? 'Configured' : 'Not configured'}`);
+  console.log('📋 Available routes:');
+  console.log('   GET  /api/health          - Health check');
+  console.log('   GET  /api/test           - Test route');
+  console.log('   GET  /api/products       - List products');
+  console.log('   GET  /api/demo/products  - Demo products (no DB required)');
+  console.log('   POST /api/auth/login     - Login');
+  console.log('   POST /api/auth/register  - Register');
 });
-
-// Gestion des erreurs du serveur
-server.on('error', (error) => {
-  if (error.code === 'EADDRINUSE') {
-    console.error(`❌ Port ${PORT} is already in use`);
-    process.exit(1);
-  } else {
-    throw error;
-  }
-});
-
-// Exporter l'app pour les tests
-module.exports = app;
