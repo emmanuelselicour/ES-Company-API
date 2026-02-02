@@ -1,5 +1,29 @@
 const mongoose = require('mongoose');
 
+const orderItemSchema = new mongoose.Schema({
+  product: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product',
+    required: true
+  },
+  name: {
+    type: String,
+    required: true
+  },
+  price: {
+    type: Number,
+    required: true
+  },
+  quantity: {
+    type: Number,
+    required: true,
+    min: 1
+  },
+  image: String,
+  color: String,
+  size: String
+});
+
 const orderSchema = new mongoose.Schema({
   orderNumber: {
     type: String,
@@ -11,21 +35,7 @@ const orderSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  items: [{
-    product: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Product',
-      required: true
-    },
-    name: String,
-    price: Number,
-    quantity: {
-      type: Number,
-      required: true,
-      min: 1
-    },
-    image: String
-  }],
+  items: [orderItemSchema],
   shippingAddress: {
     name: String,
     street: String,
@@ -35,10 +45,18 @@ const orderSchema = new mongoose.Schema({
     zipCode: String,
     phone: String
   },
+  billingAddress: {
+    name: String,
+    street: String,
+    city: String,
+    state: String,
+    country: String,
+    zipCode: String
+  },
   paymentMethod: {
     type: String,
-    enum: ['cash', 'card', 'mobile_money'],
-    required: true
+    enum: ['cash_on_delivery', 'credit_card', 'mobile_money'],
+    default: 'cash_on_delivery'
   },
   paymentStatus: {
     type: String,
@@ -47,42 +65,44 @@ const orderSchema = new mongoose.Schema({
   },
   orderStatus: {
     type: String,
-    enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
+    enum: ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'],
     default: 'pending'
   },
   subtotal: {
     type: Number,
-    required: true,
-    min: 0
+    required: true
   },
   shippingFee: {
     type: Number,
-    default: 0,
-    min: 0
+    default: 0
   },
   tax: {
     type: Number,
-    default: 0,
-    min: 0
+    default: 0
+  },
+  discount: {
+    type: Number,
+    default: 0
   },
   total: {
     type: Number,
-    required: true,
-    min: 0
+    required: true
   },
   notes: String,
+  trackingNumber: String,
+  estimatedDelivery: Date,
   deliveredAt: Date,
   cancelledAt: Date
 }, {
   timestamps: true
 });
 
-// Generate order number before saving
-orderSchema.pre('save', function(next) {
+// Generate order number
+orderSchema.pre('save', async function(next) {
   if (!this.orderNumber) {
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 1000);
-    this.orderNumber = `ORD-${timestamp}-${random}`;
+    const year = new Date().getFullYear();
+    const count = await mongoose.models.Order.countDocuments();
+    this.orderNumber = `ORD-${year}-${String(count + 1).padStart(5, '0')}`;
   }
   next();
 });
