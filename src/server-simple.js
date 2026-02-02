@@ -5,11 +5,15 @@ require('dotenv').config();
 const app = express();
 
 // Middleware CORS configuré pour accepter votre domaine Netlify
+// Dans server-simple.js, remplacez la configuration CORS :
+const cors = require('cors');
+
 const corsOptions = {
   origin: [
     'https://es-company-ht.netlify.app',
     'http://localhost:3000',
     'http://localhost:5173',
+    'http://localhost:8080',
     process.env.FRONTEND_URL
   ].filter(Boolean),
   credentials: true,
@@ -18,7 +22,19 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json());
+
+// Ajoutez ce middleware pour gérer les pré-requêtes OPTIONS
+app.options('*', cors(corsOptions));
+
+
+
+
+
+
+
+
+
+
 app.use(express.urlencoded({ extended: true }));
 
 // Données en mémoire pour le développement
