@@ -1,7 +1,54 @@
-// Ajoutez ces champs au schéma User
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+
 const userSchema = new mongoose.Schema({
-  // ... champs existants ...
-  
+  name: {
+    type: String,
+    required: [true, 'Name is required'],
+    trim: true,
+    maxlength: [100, 'Name cannot exceed 100 characters']
+  },
+  email: {
+    type: String,
+    required: [true, 'Email is required'],
+    unique: true,
+    lowercase: true,
+    trim: true,
+    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email']
+  },
+  password: {
+    type: String,
+    required: [true, 'Password is required'],
+    minlength: [6, 'Password must be at least 6 characters'],
+    select: false
+  },
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user'
+  },
+  avatar: {
+    type: String,
+    default: ''
+  },
+  address: {
+    street: String,
+    city: String,
+    state: String,
+    country: String,
+    zipCode: String
+  },
+  phone: String,
+  wishlist: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product'
+  }],
+  isActive: {
+    type: Boolean,
+    default: true
+  },
   emailVerified: {
     type: Boolean,
     default: false
@@ -10,8 +57,6 @@ const userSchema = new mongoose.Schema({
   verificationTokenExpires: Date,
   resetPasswordToken: String,
   resetPasswordExpires: Date,
-  
-  // Préférences utilisateur
   preferences: {
     newsletter: {
       type: Boolean,
@@ -22,8 +67,7 @@ const userSchema = new mongoose.Schema({
       default: true
     }
   },
-  
-  // Historique
+  lastLogin: Date,
   lastActivity: Date,
   loginCount: {
     type: Number,
@@ -33,12 +77,41 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Ajoutez cette méthode pour générer un token de réinitialisation
+// Hash password before saving
+userSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Compare password method
+userSchema.methods.comparePassword = async function(candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
+};
+
+// Generate JWT token
+userSchema.methods.generateAuthToken = function() {
+  return jwt.sign(
+    { 
+      userId: this._id, 
+      email: this.email, 
+      role: this.role 
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRE || '30d' }
+  );
+};
+
+// Generate reset password token
 userSchema.methods.generateResetPasswordToken = function() {
-  // Générer un token
   const resetToken = crypto.randomBytes(20).toString('hex');
   
-  // Hasher le token et le sauvegarder
   this.resetPasswordToken = crypto
     .createHash('sha256')
     .update(resetToken)
@@ -49,7 +122,7 @@ userSchema.methods.generateResetPasswordToken = function() {
   return resetToken;
 };
 
-// Ajoutez cette méthode pour générer un token de vérification d'email
+// Generate verification token
 userSchema.methods.generateVerificationToken = function() {
   const verificationToken = crypto.randomBytes(20).toString('hex');
   
@@ -62,3 +135,19 @@ userSchema.methods.generateVerificationToken = function() {
   
   return verificationToken;
 };
+
+// Remove sensitive information from JSON response
+userSchema.methods.toJSON = function() {
+  const user = this.toObject();
+  delete user.password;
+  delete user.__v;
+  delete user.resetPasswordToken;
+  delete user.resetPasswordExpires;
+  delete user.verificationToken;
+  delete user.verificationTokenExpires;
+  return user;
+};
+
+const User = mongoose.model('User', userSchema);
+
+module.exports = User;
