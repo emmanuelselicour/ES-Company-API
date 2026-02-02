@@ -4,49 +4,20 @@ require('dotenv').config();
 
 const app = express();
 
-// ✅ CORRECTION 1: Configuration CORS COMPLÈTE
+// Middleware CORS configuré pour accepter votre domaine Netlify
 const corsOptions = {
   origin: [
     'https://es-company-ht.netlify.app',
     'http://localhost:3000',
     'http://localhost:5173',
-    'https://es-company-ht.netlify.app/',
-    'https://es-company-ht.netlify.app/*'
-  ],
+    process.env.FRONTEND_URL
+  ].filter(Boolean),
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 };
 
-// ✅ CORRECTION 2: Gérer les pré-vols OPTIONS
-app.options('*', cors(corsOptions));
 app.use(cors(corsOptions));
-
-// Middleware basique
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// ✅ CORRECTION 3: Ajouter des logs pour le débogage
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
-  console.log('Origin:', req.headers.origin);
-  console.log('Authorization:', req.headers.authorization ? 'Present' : 'Missing');
-  next();
-});
-
-// ... reste du code (produits, auth, panier) ...
-
-
-
-
-const express = require('express');
-const cors = require('cors');
-require('dotenv').config();
-
-const app = express();
-
-// Middleware basique
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -55,38 +26,123 @@ let products = [
   {
     id: 1,
     name: "Robe d'été fleurie",
-    description: "Robe légère et confortable pour l'été",
+    description: "Robe légère et confortable pour l'été avec motif floral élégant. Parfaite pour les occasions spéciales ou les sorties quotidiennes.",
     price: 2500,
     category: "robes",
     stock: 15,
     status: "active",
+    featured: true,
+    discount: 10,
     images: [{
       url: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
       alt: "Robe d'été fleurie"
-    }]
+    }],
+    specifications: {
+      material: "Coton",
+      color: "Multicolore",
+      size: ["S", "M", "L", "XL"]
+    },
+    createdAt: new Date(),
+    updatedAt: new Date()
   },
   {
     id: 2,
     name: "Pantalon slim noir",
-    description: "Pantalon élégant en tissu stretch",
+    description: "Pantalon slim élégant en tissu stretch confortable. Idéal pour le bureau ou les sorties.",
     price: 1800,
     category: "pantalons",
     stock: 25,
     status: "active",
+    featured: false,
+    discount: 0,
     images: [{
       url: "https://images.unsplash.com/photo-1586790170083-2f9ceadc732d?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
       alt: "Pantalon slim noir"
-    }]
+    }],
+    specifications: {
+      material: "Polyester",
+      color: "Noir",
+      size: ["S", "M", "L"]
+    },
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: 3,
+    name: "Jupe plissée bleue",
+    description: "Jupe plissée midi dans un bleu pastel tendance. Élégante et confortable.",
+    price: 1200,
+    category: "jupes",
+    stock: 10,
+    status: "active",
+    featured: true,
+    discount: 5,
+    images: [{
+      url: "https://images.unsplash.com/photo-1585487000160-6eb9ce6b5a53?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+      alt: "Jupe plissée bleue"
+    }],
+    specifications: {
+      material: "Polyester",
+      color: "Bleu pastel",
+      size: ["S", "M", "L"]
+    },
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: 4,
+    name: "Chaussures à talons rouges",
+    description: "Chaussures élégantes à talons pour occasions spéciales. Confortables et stylées.",
+    price: 3500,
+    category: "chaussures",
+    stock: 8,
+    status: "active",
+    featured: true,
+    discount: 15,
+    images: [{
+      url: "https://images.unsplash.com/photo-1549298916-b41d501d3772?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+      alt: "Chaussures à talons rouges"
+    }],
+    specifications: {
+      material: "Cuir",
+      color: "Rouge",
+      size: ["36", "37", "38", "39"]
+    },
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: 5,
+    name: "Collier en argent",
+    description: "Collier élégant en argent avec pendentif. Bijou raffiné pour toutes occasions.",
+    price: 800,
+    category: "bijoux",
+    stock: 30,
+    status: "active",
+    featured: false,
+    discount: 0,
+    images: [{
+      url: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+      alt: "Collier en argent"
+    }],
+    specifications: {
+      material: "Argent 925",
+      color: "Argent",
+      length: "45 cm"
+    },
+    createdAt: new Date(),
+    updatedAt: new Date()
   }
 ];
 
 let users = [
   {
     id: 1,
-    name: "Admin E-S COMPANY",
+    name: "Administrateur E-S COMPANY",
     email: "admin@escompany.com",
     password: "admin123",
-    role: "admin"
+    role: "admin",
+    createdAt: new Date()
   }
 ];
 
@@ -95,13 +151,20 @@ let carts = [];
 // ==================== ROUTES PRODUITS ====================
 // GET tous les produits
 app.get('/api/products', (req, res) => {
-  const { category, search, page = 1, limit = 12 } = req.query;
+  console.log('📦 GET /api/products called');
+  
+  const { category, search, page = 1, limit = 12, status = 'active' } = req.query;
   
   let filteredProducts = [...products];
   
   // Filtrage par catégorie
   if (category) {
     filteredProducts = filteredProducts.filter(p => p.category === category);
+  }
+  
+  // Filtrage par statut
+  if (status) {
+    filteredProducts = filteredProducts.filter(p => p.status === status);
   }
   
   // Recherche
@@ -168,7 +231,10 @@ app.post('/api/products', (req, res) => {
     category,
     stock: parseInt(stock),
     status: 'active',
+    featured: false,
+    discount: 0,
     images: req.body.images || [],
+    specifications: req.body.specifications || {},
     createdAt: new Date(),
     updatedAt: new Date()
   };
@@ -179,52 +245,6 @@ app.post('/api/products', (req, res) => {
     status: 'success',
     message: 'Product created successfully',
     data: { product: newProduct }
-  });
-});
-
-// PUT mettre à jour un produit
-app.put('/api/products/:id', (req, res) => {
-  const productIndex = products.findIndex(p => p.id === parseInt(req.params.id));
-  
-  if (productIndex === -1) {
-    return res.status(404).json({
-      status: 'error',
-      message: 'Product not found'
-    });
-  }
-  
-  const updatedProduct = {
-    ...products[productIndex],
-    ...req.body,
-    updatedAt: new Date()
-  };
-  
-  products[productIndex] = updatedProduct;
-  
-  res.json({
-    status: 'success',
-    message: 'Product updated successfully',
-    data: { product: updatedProduct }
-  });
-});
-
-// DELETE supprimer un produit
-app.delete('/api/products/:id', (req, res) => {
-  const productIndex = products.findIndex(p => p.id === parseInt(req.params.id));
-  
-  if (productIndex === -1) {
-    return res.status(404).json({
-      status: 'error',
-      message: 'Product not found'
-    });
-  }
-  
-  const deletedProduct = products.splice(productIndex, 1)[0];
-  
-  res.json({
-    status: 'success',
-    message: 'Product deleted successfully',
-    data: { product: deletedProduct }
   });
 });
 
@@ -244,7 +264,7 @@ app.get('/api/products/category/:category', (req, res) => {
 // GET produits en vedette
 app.get('/api/products/featured', (req, res) => {
   const featuredProducts = products
-    .filter(p => p.status === 'active')
+    .filter(p => p.status === 'active' && p.featured)
     .slice(0, 8);
   
   res.json({
@@ -253,9 +273,36 @@ app.get('/api/products/featured', (req, res) => {
   });
 });
 
+// GET statistiques produits
+app.get('/api/products/stats', (req, res) => {
+  const totalProducts = products.length;
+  const activeProducts = products.filter(p => p.status === 'active').length;
+  const outOfStockProducts = products.filter(p => p.stock === 0).length;
+  const lowStockProducts = products.filter(p => p.stock < 5 && p.stock > 0).length;
+  
+  const totalValue = products.reduce((sum, product) => {
+    return sum + (product.price * product.stock);
+  }, 0);
+  
+  res.json({
+    status: 'success',
+    data: {
+      totalProducts,
+      activeProducts,
+      outOfStockProducts,
+      lowStockProducts,
+      totalValue,
+      averagePrice: totalProducts > 0 ? totalValue / totalProducts : 0
+    }
+  });
+});
+
 // ==================== ROUTES AUTHENTIFICATION ====================
 // POST inscription
 app.post('/api/auth/register', (req, res) => {
+  console.log('👤 POST /api/auth/register called');
+  console.log('📋 Body:', req.body);
+  
   const { name, email, password } = req.body;
   
   if (!name || !email || !password) {
@@ -291,7 +338,8 @@ app.post('/api/auth/register', (req, res) => {
     userId: newUser.id,
     items: [],
     totalItems: 0,
-    totalPrice: 0
+    totalPrice: 0,
+    createdAt: new Date()
   });
   
   // Générer un token simple (en production, utiliser JWT)
@@ -314,6 +362,9 @@ app.post('/api/auth/register', (req, res) => {
 
 // POST connexion
 app.post('/api/auth/login', (req, res) => {
+  console.log('🔐 POST /api/auth/login called');
+  console.log('📋 Body:', req.body);
+  
   const { email, password } = req.body;
   
   if (!email || !password) {
@@ -433,6 +484,8 @@ app.get('/api/auth/me', (req, res) => {
 // ==================== ROUTES PANIER ====================
 // GET panier utilisateur
 app.get('/api/cart', (req, res) => {
+  console.log('🛒 GET /api/cart called');
+  
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -463,7 +516,8 @@ app.get('/api/cart', (req, res) => {
       items: [],
       totalItems: 0,
       totalPrice: 0,
-      createdAt: new Date()
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
     carts.push(cart);
   }
@@ -476,6 +530,9 @@ app.get('/api/cart', (req, res) => {
 
 // POST ajouter au panier
 app.post('/api/cart/items', (req, res) => {
+  console.log('➕ POST /api/cart/items called');
+  console.log('📋 Body:', req.body);
+  
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -496,7 +553,7 @@ app.post('/api/cart/items', (req, res) => {
   }
   
   const userId = parseInt(match[1]);
-  const { productId, quantity = 1 } = req.body;
+  const { productId, quantity = 1, color, size } = req.body;
   
   // Trouver le produit
   const product = products.find(p => p.id === parseInt(productId));
@@ -505,6 +562,14 @@ app.post('/api/cart/items', (req, res) => {
     return res.status(404).json({
       status: 'error',
       message: 'Product not found'
+    });
+  }
+  
+  // Vérifier le stock
+  if (product.stock < quantity) {
+    return res.status(400).json({
+      status: 'error',
+      message: `Only ${product.stock} items available in stock`
     });
   }
   
@@ -517,13 +582,18 @@ app.post('/api/cart/items', (req, res) => {
       items: [],
       totalItems: 0,
       totalPrice: 0,
-      createdAt: new Date()
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
     carts.push(cart);
   }
   
   // Vérifier si le produit est déjà dans le panier
-  const existingItemIndex = cart.items.findIndex(item => item.productId === parseInt(productId));
+  const existingItemIndex = cart.items.findIndex(item => 
+    item.productId === parseInt(productId) &&
+    item.color === color &&
+    item.size === size
+  );
   
   if (existingItemIndex > -1) {
     // Mettre à jour la quantité
@@ -535,7 +605,9 @@ app.post('/api/cart/items', (req, res) => {
       name: product.name,
       price: product.price,
       quantity,
-      image: product.images && product.images[0] ? product.images[0].url : ''
+      image: product.images && product.images[0] ? product.images[0].url : '',
+      color: color || null,
+      size: size || null
     });
   }
   
@@ -574,7 +646,7 @@ app.put('/api/cart/items/:productId', (req, res) => {
   
   const userId = parseInt(match[1]);
   const productId = parseInt(req.params.productId);
-  const { quantity } = req.body;
+  const { quantity, color, size } = req.body;
   
   const cart = carts.find(c => c.userId === userId);
   if (!cart) {
@@ -584,7 +656,12 @@ app.put('/api/cart/items/:productId', (req, res) => {
     });
   }
   
-  const itemIndex = cart.items.findIndex(item => item.productId === productId);
+  const itemIndex = cart.items.findIndex(item => 
+    item.productId === productId &&
+    item.color === color &&
+    item.size === size
+  );
+  
   if (itemIndex === -1) {
     return res.status(404).json({
       status: 'error',
@@ -635,6 +712,7 @@ app.delete('/api/cart/items/:productId', (req, res) => {
   
   const userId = parseInt(match[1]);
   const productId = parseInt(req.params.productId);
+  const { color, size } = req.body;
   
   const cart = carts.find(c => c.userId === userId);
   if (!cart) {
@@ -644,7 +722,12 @@ app.delete('/api/cart/items/:productId', (req, res) => {
     });
   }
   
-  const itemIndex = cart.items.findIndex(item => item.productId === productId);
+  const itemIndex = cart.items.findIndex(item => 
+    item.productId === productId &&
+    item.color === (color || null) &&
+    item.size === (size || null)
+  );
+  
   if (itemIndex === -1) {
     return res.status(404).json({
       status: 'error',
@@ -711,6 +794,48 @@ app.get('/api/cart/summary', (req, res) => {
   });
 });
 
+// DELETE vider le panier
+app.delete('/api/cart', (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Authentication required'
+    });
+  }
+  
+  const token = authHeader.split(' ')[1];
+  const match = token.match(/token-(\d+)-/);
+  
+  if (!match) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Invalid token'
+    });
+  }
+  
+  const userId = parseInt(match[1]);
+  const cart = carts.find(c => c.userId === userId);
+  
+  if (!cart) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Cart not found'
+    });
+  }
+  
+  cart.items = [];
+  cart.totalItems = 0;
+  cart.totalPrice = 0;
+  cart.updatedAt = new Date();
+  
+  res.json({
+    status: 'success',
+    message: 'Cart cleared successfully'
+  });
+});
+
 // ==================== ROUTES UTILES ====================
 // Health check
 app.get('/api/health', (req, res) => {
@@ -735,8 +860,10 @@ app.get('/api/test', (req, res) => {
     message: 'API test route works',
     env: {
       node_env: process.env.NODE_ENV,
-      port: process.env.PORT
-    }
+      port: process.env.PORT,
+      frontend_url: process.env.FRONTEND_URL
+    },
+    headers: req.headers
   });
 });
 
@@ -785,4 +912,5 @@ app.listen(PORT, () => {
   console.log(`🩺 Health Check: http://localhost:${PORT}/api/health`);
   console.log(`📦 Products loaded: ${products.length}`);
   console.log(`👤 Admin user: admin@escompany.com / admin123`);
+  console.log(`🌐 CORS enabled for: ${corsOptions.origin.join(', ')}`);
 });
