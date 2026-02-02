@@ -4,6 +4,47 @@ require('dotenv').config();
 
 const app = express();
 
+// ✅ CORRECTION 1: Configuration CORS COMPLÈTE
+const corsOptions = {
+  origin: [
+    'https://es-company-ht.netlify.app',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://es-company-ht.netlify.app/',
+    'https://es-company-ht.netlify.app/*'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
+};
+
+// ✅ CORRECTION 2: Gérer les pré-vols OPTIONS
+app.options('*', cors(corsOptions));
+app.use(cors(corsOptions));
+
+// Middleware basique
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// ✅ CORRECTION 3: Ajouter des logs pour le débogage
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  console.log('Origin:', req.headers.origin);
+  console.log('Authorization:', req.headers.authorization ? 'Present' : 'Missing');
+  next();
+});
+
+// ... reste du code (produits, auth, panier) ...
+
+
+
+
+const express = require('express');
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+
 // Middleware basique
 app.use(cors());
 app.use(express.json());
