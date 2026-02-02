@@ -2,29 +2,17 @@ services:
   - type: web
     name: es-company-api
     env: node
-    region: ohio  # ou une autre région proche d'Haïti
+    region: ohio
     buildCommand: npm install
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 10000
       - key: MONGODB_URI
         sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: FRONTEND_URL
         value: https://es-company-ht.netlify.app
-      - key: ADMIN_URL
-        value: https://es-company-ht.netlify.app/admin-panel/index.html
-      - key: CLOUDINARY_CLOUD_NAME
-        sync: false
-      - key: CLOUDINARY_API_KEY
-        sync: false
-      - key: CLOUDINARY_API_SECRET
-        sync: false
-      - key: ADMIN_EMAIL
-        value: admin@escompany.com
-      - key: ADMIN_PASSWORD
-        value: admin123
-    healthCheckPath: /api/health
-    autoDeploy: true
