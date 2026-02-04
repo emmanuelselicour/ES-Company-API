@@ -81,20 +81,6 @@ const productSchema = new mongoose.Schema({
     default: false
   },
   tags: [String],
-  options: [{
-    name: String,
-    values: [String]
-  }],
-  variants: [{
-    sku: String,
-    price: Number,
-    comparePrice: Number,
-    quantity: Number,
-    options: [{
-      name: String,
-      value: String
-    }]
-  }],
   createdAt: {
     type: Date,
     default: Date.now
@@ -111,6 +97,17 @@ productSchema.index({ name: 'text', description: 'text', sku: 'text' });
 // Middleware pour mettre à jour la date de modification
 productSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
+  
+  // Générer SKU automatique si non fourni
+  if (!this.sku) {
+    const prefix = 'ES';
+    const random = Math.floor(1000 + Math.random() * 9000);
+    const date = new Date();
+    const year = date.getFullYear().toString().substr(-2);
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    this.sku = `${prefix}${year}${month}${random}`;
+  }
+  
   next();
 });
 
