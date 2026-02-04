@@ -12,23 +12,17 @@ router.get('/', async (req, res) => {
       search, 
       minPrice, 
       maxPrice, 
-      status, 
+      status = 'active',
       featured,
-      sort = 'createdAt',
-      order = 'desc',
       limit = 50,
       page = 1 
     } = req.query;
     
     // Filtres
-    const filter = {};
+    const filter = { status };
     
     if (category) {
       filter.category = category;
-    }
-    
-    if (status) {
-      filter.status = status;
     }
     
     if (featured === 'true') {
@@ -50,17 +44,12 @@ router.get('/', async (req, res) => {
       ];
     }
     
-    // Tri
-    const sortOrder = order === 'asc' ? 1 : -1;
-    const sortObj = {};
-    sortObj[sort] = sortOrder;
-    
     // Pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
     const products = await Product.find(filter)
       .populate('category', 'name name_en name_es slug')
-      .sort(sortObj)
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
     
@@ -79,7 +68,10 @@ router.get('/', async (req, res) => {
     
   } catch (error) {
     console.error('Erreur get products:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Erreur serveur' 
+    });
   }
 });
 
@@ -90,7 +82,10 @@ router.get('/:id', async (req, res) => {
       .populate('category', 'name name_en name_es slug');
     
     if (!product) {
-      return res.status(404).json({ error: 'Produit non trouvé' });
+      return res.status(404).json({ 
+        success: false,
+        error: 'Produit non trouvé' 
+      });
     }
     
     res.json({
@@ -100,7 +95,10 @@ router.get('/:id', async (req, res) => {
     
   } catch (error) {
     console.error('Erreur get product:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Erreur serveur' 
+    });
   }
 });
 
@@ -125,14 +123,13 @@ router.post('/', adminAuth, async (req, res) => {
       images,
       status,
       isFeatured,
-      tags,
-      options,
-      variants
+      tags
     } = req.body;
     
     // Validation
     if (!name || !category || !price) {
       return res.status(400).json({ 
+        success: false,
         error: 'Nom, catégorie et prix sont obligatoires' 
       });
     }
@@ -140,26 +137,10 @@ router.post('/', adminAuth, async (req, res) => {
     // Vérifier que la catégorie existe
     const categoryExists = await Category.findById(category);
     if (!categoryExists) {
-      return res.status(400).json({ error: 'Catégorie invalide' });
-    }
-    
-    // Générer SKU automatique si non fourni
-    let productSku = sku;
-    if (!productSku) {
-      const prefix = 'ES';
-      const random = Math.floor(1000 + Math.random() * 9000);
-      const date = new Date();
-      const year = date.getFullYear().toString().substr(-2);
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      productSku = `${prefix}${year}${month}${random}`;
-    }
-    
-    // Vérifier si SKU existe déjà
-    if (sku) {
-      const existingProduct = await Product.findOne({ sku: productSku });
-      if (existingProduct) {
-        return res.status(400).json({ error: 'SKU déjà utilisé' });
-      }
+      return res.status(400).json({ 
+        success: false,
+        error: 'Catégorie invalide' 
+      });
     }
     
     // Créer le produit
@@ -174,16 +155,14 @@ router.post('/', adminAuth, async (req, res) => {
       price: parseFloat(price),
       comparePrice: comparePrice ? parseFloat(comparePrice) : undefined,
       cost: cost ? parseFloat(cost) : undefined,
-      sku: productSku,
-      barcode,
+      sku: sku || undefined,
+      barcode: barcode || undefined,
       trackQuantity: trackQuantity || false,
       quantity: quantity || 0,
       images: images || [],
       status: status || 'active',
       isFeatured: isFeatured || false,
-      tags: tags || [],
-      options: options || [],
-      variants: variants || []
+      tags: tags || []
     });
     
     await product.save();
@@ -199,7 +178,19 @@ router.post('/', adminAuth, async (req, res) => {
     
   } catch (error) {
     console.error('Erreur create product:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
+    
+    // Gestion des erreurs de duplication SKU
+    if (error.code === 11000 && error.keyPattern?.sku) {
+      return res.status(400).json({
+        success: false,
+        error: 'Ce SKU est déjà utilisé'
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Erreur serveur' 
+    });
   }
 });
 
@@ -209,14 +200,20 @@ router.put('/:id', adminAuth, async (req, res) => {
     const product = await Product.findById(req.params.id);
     
     if (!product) {
-      return res.status(404).json({ error: 'Produit non trouvé' });
+      return res.status(404).json({ 
+        success: false,
+        error: 'Produit non trouvé' 
+      });
     }
     
     // Vérifier le SKU unique si modifié
     if (req.body.sku && req.body.sku !== product.sku) {
       const existingProduct = await Product.findOne({ sku: req.body.sku });
       if (existingProduct) {
-        return res.status(400).json({ error: 'SKU déjà utilisé' });
+        return res.status(400).json({ 
+          success: false,
+          error: 'SKU déjà utilisé' 
+        });
       }
     }
     
@@ -224,13 +221,16 @@ router.put('/:id', adminAuth, async (req, res) => {
     if (req.body.category) {
       const categoryExists = await Category.findById(req.body.category);
       if (!categoryExists) {
-        return res.status(400).json({ error: 'Catégorie invalide' });
+        return res.status(400).json({ 
+          success: false,
+          error: 'Catégorie invalide' 
+        });
       }
     }
     
     // Mise à jour
     Object.keys(req.body).forEach(key => {
-      if (key !== '_id' && key !== '__v') {
+      if (key !== '_id' && key !== '__v' && key !== 'createdAt') {
         product[key] = req.body[key];
       }
     });
@@ -250,7 +250,18 @@ router.put('/:id', adminAuth, async (req, res) => {
     
   } catch (error) {
     console.error('Erreur update product:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
+    
+    if (error.code === 11000 && error.keyPattern?.sku) {
+      return res.status(400).json({
+        success: false,
+        error: 'Ce SKU est déjà utilisé'
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Erreur serveur' 
+    });
   }
 });
 
@@ -260,11 +271,11 @@ router.delete('/:id', adminAuth, async (req, res) => {
     const product = await Product.findById(req.params.id);
     
     if (!product) {
-      return res.status(404).json({ error: 'Produit non trouvé' });
+      return res.status(404).json({ 
+        success: false,
+        error: 'Produit non trouvé' 
+      });
     }
-    
-    // Vérifier s'il y a des commandes pour ce produit
-    // (À implémenter si nécessaire)
     
     await product.deleteOne();
     
@@ -275,115 +286,10 @@ router.delete('/:id', adminAuth, async (req, res) => {
     
   } catch (error) {
     console.error('Erreur delete product:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// POST upload image (admin)
-router.post('/:id/images', adminAuth, async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    
-    if (!product) {
-      return res.status(404).json({ error: 'Produit non trouvé' });
-    }
-    
-    const { images } = req.body;
-    
-    if (!images || !Array.isArray(images)) {
-      return res.status(400).json({ error: 'Images invalides' });
-    }
-    
-    // Ajouter les nouvelles images
-    product.images.push(...images);
-    
-    // Marquer la première image comme principale si aucune image principale
-    if (product.images.length > 0 && !product.images.some(img => img.isMain)) {
-      product.images[0].isMain = true;
-    }
-    
-    await product.save();
-    
-    res.json({
-      success: true,
-      message: 'Images ajoutées avec succès',
-      data: product.images
+    res.status(500).json({ 
+      success: false,
+      error: 'Erreur serveur' 
     });
-    
-  } catch (error) {
-    console.error('Erreur upload images:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// PUT définir image principale (admin)
-router.put('/:id/images/main', adminAuth, async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    
-    if (!product) {
-      return res.status(404).json({ error: 'Produit non trouvé' });
-    }
-    
-    const { imageIndex } = req.body;
-    
-    if (imageIndex === undefined || imageIndex < 0 || imageIndex >= product.images.length) {
-      return res.status(400).json({ error: 'Index d\'image invalide' });
-    }
-    
-    // Réinitialiser toutes les images
-    product.images.forEach((img, index) => {
-      img.isMain = index === imageIndex;
-    });
-    
-    await product.save();
-    
-    res.json({
-      success: true,
-      message: 'Image principale définie',
-      data: product.images
-    });
-    
-  } catch (error) {
-    console.error('Erreur set main image:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// DELETE supprimer une image (admin)
-router.delete('/:id/images/:imageIndex', adminAuth, async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    
-    if (!product) {
-      return res.status(404).json({ error: 'Produit non trouvé' });
-    }
-    
-    const imageIndex = parseInt(req.params.imageIndex);
-    
-    if (imageIndex < 0 || imageIndex >= product.images.length) {
-      return res.status(400).json({ error: 'Index d\'image invalide' });
-    }
-    
-    // Supprimer l'image
-    product.images.splice(imageIndex, 1);
-    
-    // Si on a supprimé l'image principale et qu'il reste des images, définir la première comme principale
-    if (product.images.length > 0 && !product.images.some(img => img.isMain)) {
-      product.images[0].isMain = true;
-    }
-    
-    await product.save();
-    
-    res.json({
-      success: true,
-      message: 'Image supprimée',
-      data: product.images
-    });
-    
-  } catch (error) {
-    console.error('Erreur delete image:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
@@ -392,19 +298,19 @@ router.get('/random/featured', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 6;
     
-    const products = await Product.aggregate([
-      { $match: { status: 'active' } },
-      { $sample: { size: limit } },
-      { 
-        $lookup: {
-          from: 'categories',
-          localField: 'category',
-          foreignField: '_id',
-          as: 'category'
-        }
-      },
-      { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } }
-    ]);
+    // Récupérer tous les IDs des produits actifs
+    const activeProducts = await Product.find({ status: 'active' }).select('_id');
+    const productIds = activeProducts.map(p => p._id);
+    
+    // Mélanger les IDs
+    const shuffledIds = [...productIds].sort(() => 0.5 - Math.random());
+    
+    // Prendre les premiers 'limit' IDs
+    const selectedIds = shuffledIds.slice(0, limit);
+    
+    // Récupérer les produits complets
+    const products = await Product.find({ _id: { $in: selectedIds } })
+      .populate('category', 'name name_en name_es slug');
     
     res.json({
       success: true,
@@ -413,7 +319,10 @@ router.get('/random/featured', async (req, res) => {
     
   } catch (error) {
     console.error('Erreur random products:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Erreur serveur' 
+    });
   }
 });
 
