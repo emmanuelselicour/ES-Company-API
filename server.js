@@ -1,101 +1,84 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-require('dotenv').config();
+const dotenv = require('dotenv');
+const path = require('path');
+
+// Routes
+const authRoutes = require('./routes/auth');
+const productRoutes = require('./routes/products');
+const categoryRoutes = require('./routes/categories');
+const orderRoutes = require('./routes/orders');
+const userRoutes = require('./routes/users');
+
+dotenv.config();
 
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['https://es-company-ht.netlify.app', 'http://localhost:3000'],
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Koneksyon MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost/es-company', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
+// Connexion MongoDB
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/es-company', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => console.log('✅ Connecté à MongoDB'))
+.catch(err => console.error('❌ Erreur MongoDB:', err));
+
+// Routes API
+app.use('/api/auth', authRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/users', userRoutes);
+
+// Route pour vérifier que l'API fonctionne
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    message: 'E-S COMPANY API fonctionnelle',
+    timestamp: new Date().toISOString()
+  });
 });
 
-// Schema Produit
-const productSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    description: { type: String, required: true },
-    price: { type: Number, required: true },
-    category: { type: String, required: true },
-    images: { type: [String], default: [] },
-    inStock: { type: Boolean, default: true },
-    featured: { type: Boolean, default: false },
-    createdAt: { type: Date, default: Date.now }
-});
-
-const Product = mongoose.model('Product', productSchema);
-
-// Route pou jwenn tout produk yo (aleatwa)
-app.get('/api/products', async (req, res) => {
-    try {
-        const products = await Product.find({ inStock: true });
-        
-        // Melanje produk yo aleatwa
-        const shuffledProducts = products
-            .map(product => ({ ...product._doc, sort: Math.random() }))
-            .sort((a, b) => a.sort - b.sort)
-            .map(({ sort, ...rest }) => rest);
-        
-        res.json(shuffledProducts);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+// Route par défaut
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Bienvenue sur l\'API E-S COMPANY',
+    version: '1.0.0',
+    endpoints: {
+      auth: '/api/auth',
+      products: '/api/products',
+      categories: '/api/categories',
+      orders: '/api/orders',
+      users: '/api/users'
     }
+  });
 });
 
-// Route pou jwenn yon sèl produk
-app.get('/api/products/:id', async (req, res) => {
-    try {
-        const product = await Product.findById(req.params.id);
-        if (!product) {
-            return res.status(404).json({ error: 'Produk pa jwenn' });
-        }
-        res.json(product);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+// Gestion des erreurs 404
+app.use((req, res, next) => {
+  res.status(404).json({ error: 'Route non trouvée' });
 });
 
-// Route pou kreye produk (admin)
-app.post('/api/products', async (req, res) => {
-    try {
-        const product = new Product(req.body);
-        await product.save();
-        res.status(201).json(product);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
+// Gestion des erreurs globales
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(err.status || 500).json({
+    error: err.message || 'Erreur serveur interne',
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
 });
 
-// Route pou mete ajou produk
-app.put('/api/products/:id', async (req, res) => {
-    try {
-        const product = await Product.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            { new: true }
-        );
-        res.json(product);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});
-
-// Route pou efase produk
-app.delete('/api/products/:id', async (req, res) => {
-    try {
-        await Product.findByIdAndDelete(req.params.id);
-        res.json({ message: 'Produk efase' });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
+// Port d'écoute
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`API ap kouri sou pò ${PORT}`);
+  console.log(`🚀 Serveur API démarré sur le port ${PORT}`);
+  console.log(`📡 URL: http://localhost:${PORT}`);
 });
