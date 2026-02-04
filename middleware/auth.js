@@ -31,7 +31,10 @@ const adminAuth = async (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
     
     if (!token) {
-      return res.status(401).json({ error: 'Accès non autorisé' });
+      return res.status(401).json({ 
+        success: false,
+        error: 'Accès non autorisé' 
+      });
     }
     
     const decoded = jwt.verify(
@@ -41,17 +44,26 @@ const adminAuth = async (req, res, next) => {
     
     const user = await User.findById(decoded.userId);
     if (!user) {
-      return res.status(401).json({ error: 'Utilisateur non trouvé' });
+      return res.status(401).json({ 
+        success: false,
+        error: 'Utilisateur non trouvé' 
+      });
     }
     
     if (user.role !== 'admin') {
-      return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+      return res.status(403).json({ 
+        success: false,
+        error: 'Accès réservé aux administrateurs' 
+      });
     }
     
     req.user = user;
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Token invalide' });
+    res.status(401).json({ 
+      success: false,
+      error: 'Token invalide' 
+    });
   }
 };
 
