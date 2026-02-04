@@ -2,15 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const path = require('path');
 
-// Routes
-const authRoutes = require('./routes/auth');
-const productRoutes = require('./routes/products');
-const categoryRoutes = require('./routes/categories');
-const orderRoutes = require('./routes/orders');
-const userRoutes = require('./routes/users');
-
+// Load environment variables
 dotenv.config();
 
 const app = express();
@@ -24,26 +17,33 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Connexion MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/es-company', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/es-company';
+mongoose.connect(MONGODB_URI)
+.then(() => {
+  console.log('✅ Connecté à MongoDB');
+  
+  // Créer l'admin par défaut après la connexion réussie
+  require('./models/User').createDefaultAdmin();
 })
-.then(() => console.log('✅ Connecté à MongoDB'))
 .catch(err => console.error('❌ Erreur MongoDB:', err));
+
+// Import des routes
+const authRoutes = require('./routes/auth');
+const productRoutes = require('./routes/products');
+const categoryRoutes = require('./routes/categories');
 
 // Routes API
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/users', userRoutes);
 
 // Route pour vérifier que l'API fonctionne
 app.get('/api/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     message: 'E-S COMPANY API fonctionnelle',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
   });
 });
 
@@ -56,13 +56,13 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       products: '/api/products',
       categories: '/api/categories',
-      orders: '/api/orders',
-      users: '/api/users'
-    }
+      health: '/api/health'
+    },
+    documentation: 'Consultez la documentation pour plus d\'informations'
   });
 });
 
-// Gestion des erreurs 404
+// Route 404
 app.use((req, res, next) => {
   res.status(404).json({ error: 'Route non trouvée' });
 });
@@ -81,4 +81,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Serveur API démarré sur le port ${PORT}`);
   console.log(`📡 URL: http://localhost:${PORT}`);
+  console.log(`🌍 Environnement: ${process.env.NODE_ENV || 'development'}`);
 });
