@@ -11,6 +11,7 @@ router.post('/login', async (req, res) => {
     // Validation
     if (!email || !password) {
       return res.status(400).json({ 
+        success: false,
         error: 'Veuillez fournir un email et un mot de passe' 
       });
     }
@@ -19,6 +20,7 @@ router.post('/login', async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(401).json({ 
+        success: false,
         error: 'Identifiants invalides' 
       });
     }
@@ -27,6 +29,7 @@ router.post('/login', async (req, res) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({ 
+        success: false,
         error: 'Identifiants invalides' 
       });
     }
@@ -58,7 +61,10 @@ router.post('/login', async (req, res) => {
     
   } catch (error) {
     console.error('Erreur login:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Erreur serveur' 
+    });
   }
 });
 
@@ -68,7 +74,10 @@ router.post('/verify', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     
     if (!token) {
-      return res.status(401).json({ error: 'Token manquant' });
+      return res.status(401).json({ 
+        success: false,
+        error: 'Token manquant' 
+      });
     }
     
     const decoded = jwt.verify(
@@ -79,11 +88,14 @@ router.post('/verify', async (req, res) => {
     // Vérifier que l'utilisateur existe toujours
     const user = await User.findById(decoded.userId).select('-password');
     if (!user) {
-      return res.status(401).json({ error: 'Utilisateur non trouvé' });
+      return res.status(401).json({ 
+        success: false,
+        error: 'Utilisateur non trouvé' 
+      });
     }
     
     res.json({
-      valid: true,
+      success: true,
       user: {
         id: user._id,
         name: user.name,
@@ -94,7 +106,7 @@ router.post('/verify', async (req, res) => {
     
   } catch (error) {
     res.status(401).json({ 
-      valid: false, 
+      success: false,
       error: 'Token invalide' 
     });
   }
@@ -108,6 +120,7 @@ router.post('/register', async (req, res) => {
     // Validation
     if (!name || !email || !password) {
       return res.status(400).json({ 
+        success: false,
         error: 'Veuillez remplir tous les champs obligatoires' 
       });
     }
@@ -116,6 +129,7 @@ router.post('/register', async (req, res) => {
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return res.status(400).json({ 
+        success: false,
         error: 'Cet email est déjà utilisé' 
       });
     }
@@ -157,7 +171,10 @@ router.post('/register', async (req, res) => {
     
   } catch (error) {
     console.error('Erreur register:', error);
-    res.status(500).json({ error: 'Erreur serveur' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Erreur serveur' 
+    });
   }
 });
 
