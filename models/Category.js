@@ -58,8 +58,16 @@ const categorySchema = new mongoose.Schema({
   }
 });
 
-// Middleware pour mettre à jour la date de modification
+// Middleware pour générer le slug avant sauvegarde
 categorySchema.pre('save', function(next) {
+  if (!this.slug) {
+    this.slug = this.name.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+  }
+  
   this.updatedAt = Date.now();
   next();
 });
