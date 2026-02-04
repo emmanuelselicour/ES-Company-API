@@ -78,6 +78,8 @@ userSchema.statics.createDefaultAdmin = async function() {
       
       await admin.save();
       console.log('✅ Administrateur par défaut créé');
+    } else {
+      console.log('✅ Administrateur existe déjà');
     }
   } catch (error) {
     console.error('❌ Erreur création admin:', error);
