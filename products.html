@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tous les Produits | E-S COMPANY</title>
+    <link rel="icon" type="image/png" href="images/logo.png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Même header que index.html -->
+    
+    <section class="products-page">
+        <div class="container">
+            <div class="page-header">
+                <h1 data-translate="all_products">Tous les produits</h1>
+                <p data-translate="all_products_desc">Découvrez notre collection complète</p>
+            </div>
+            
+            <div class="filters">
+                <div class="filter-group">
+                    <select id="category-filter">
+                        <option value="">Toutes catégories</option>
+                        <option value="clothing">Vêtements</option>
+                        <option value="shoes">Chaussures</option>
+                        <option value="jewelry">Bijoux</option>
+                        <option value="accessories">Accessoires</option>
+                    </select>
+                    
+                    <select id="sort-filter">
+                        <option value="random">Aléatoire</option>
+                        <option value="price-low">Prix: croissant</option>
+                        <option value="price-high">Prix: décroissant</option>
+                        <option value="name">Nom: A-Z</option>
+                    </select>
+                </div>
+                
+                <div class="search-box">
+                    <input type="text" id="product-search" placeholder="Rechercher un produit...">
+                    <button><i class="fas fa-search"></i></button>
+                </div>
+            </div>
+            
+            <div class="products-grid" id="all-products-container">
+                <!-- Tous les produits seront chargés ici -->
+            </div>
+            
+            <div class="pagination">
+                <button id="prev-page" disabled>Précédent</button>
+                <span id="page-info">Page 1 sur 1</span>
+                <button id="next-page" disabled>Suivant</button>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Même footer que index.html -->
+    
+    <script src="js/language.js"></script>
+    <script src="js/cart.js"></script>
+    <script src="js/products.js"></script>
+</body>
+</html>
